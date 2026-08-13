@@ -1,0 +1,10 @@
+# Generation and DPO training run on unsloth.
+# Verified pair: torch 2.10 + unsloth 2026.8 (older unsloth releases
+# break on torch 2.10). unsloth installs its own compatible
+# transformers/trl/peft; transformers<5 because trl<=0.24 does not
+# import under transformers 5.x.
+# torch may need a CUDA-matched index URL (see pytorch.org).
+torch==2.10.*
+unsloth==2026.8.*
+transformers<5
+datasets

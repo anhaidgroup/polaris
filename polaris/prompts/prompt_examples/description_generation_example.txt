@@ -1,0 +1,73 @@
+A real description generation prompt (Table 6), built by prepare_tbl_desc
+for table Person-0 (BusinessEntityContact) of the aw dataset, using its
+expanded table and column names.
+
+----- system -----
+You are a careful, concise data documentation assistant. You ONLY use the provided table information, which may include table name, column names and table context, to infer high-level information. If something is not obvious from the schema, say 'unknown' instead of guessing. You do NOT need to restate the table name, column names, or table context in the JSON.Your output MUST be valid JSON, wrapped in triple backticks with the language tag json. Do NOT include any text outside the JSON code fence. Follow the schema exactly—no extra keys.
+
+JSON_SCHEMA (instructions, not to be echoed verbatim):
+{'type': 'object', 'properties': {'dataset_overview': {'type': 'string'}, 'key_themes_or_topics': {'type': 'array', 'items': {'type': 'string'}}, 'applications_and_use_cases': {'type': 'array', 'items': {'type': 'string'}}, 'concepts_and_synonyms': {'type': 'array', 'items': {'type': 'object', 'properties': {'concept': {'type': 'string'}, 'synonyms': {'type': 'array', 'items': {'type': 'string'}}}, 'required': ['concept', 'synonyms']}}, 'keywords_and_themes': {'type': 'array', 'items': {'type': 'string'}}, 'additional_context': {'type': 'array', 'items': {'type': 'string'}}}, 'required': ['dataset_overview', 'key_themes_or_topics', 'applications_and_use_cases', 'concepts_and_synonyms', 'keywords_and_themes', 'additional_context'], 'additionalProperties': False}
+
+Formatting rules:
+- Return ONLY a JSON object inside a ```json code fence.
+- No explanations, no headers, no markdown outside the fence.
+- Maintain key order as in the schema if possible.
+- For 'concepts_and_synonyms', include 3–6 items; each item must have 'concept' and 'synonyms' (1–4).
+
+----- user -----
+Given the table information below:
+Table Name: insurers
+Column Names:company_name, year, insurer_type, total_assets, liabilities, premiums_written
+Produce documentation following the JSON schema in the system message. Keep it concise and truthful. If unsure, use 'unknown'.
+
+----- assistant -----
+```json
+{
+  "dataset_overview": "The dataset captures financial attributes for health insurance organizations, including Health Maintenance Organizations (HMO), Managed Care Health (MCH), and Accident & Health (A&H) providers. It summarizes assets, liabilities, and premiums written by company and year, enabling analyses of financial condition and market behavior across time.",
+  "key_themes_or_topics": [
+    "Health insurance finance",
+    "Insurer types (HMO, MCH, A&H)",
+    "Financial statement metrics",
+    "Risk and solvency indicators",
+    "Premium structures",
+    "Temporal trend analysis"
+  ],
+  "applications_and_use_cases": [
+    "Evaluate financial health of insurers",
+    "Support actuarial modeling and forecasting",
+    "Benchmark performance across insurer types",
+    "Policy analysis on insurance markets",
+    "Research trends in premiums and liabilities"
+  ],
+  "concepts_and_synonyms": [
+    {"concept": "Health Insurance", "synonyms": ["Medical Insurance", "Healthcare Coverage"]},
+    {"concept": "Premiums Written", "synonyms": ["Premium Income", "Gross Written Premium"]},
+    {"concept": "Liabilities", "synonyms": ["Financial Obligations", "Reserves"]},
+    {"concept": "Assets", "synonyms": ["Total Assets", "Asset Valuation"]}
+  ],
+  "keywords_and_themes": [
+    "health insurance dataset",
+    "insurer finance",
+    "premiums",
+    "assets",
+    "liabilities",
+    "yearly financials",
+    "HMO",
+    "MCH",
+    "A&H",
+    "market analysis"
+  ],
+  "additional_context": [
+    "Values are organized by company and year.",
+    "Useful for financial stability and solvency assessment.",
+    "Facilitates comparisons among insurer types.",
+    "Temporal coverage inferred from the 'year' column only."
+  ]
+}
+```
+
+----- user -----
+Using the table information provided below, generate JSON that follows the schema in the system message. Write 2–5 sentences for 'dataset_overview'. Provide specific, schema-derived items; avoid speculation. If information is unclear, use 'unknown'. Output JSON ONLY, wrapped in ```json fences.
+
+Table Name: Business Entity Contact
+Column Names: Business Identifier, Person Identifier, Contact Type Identifier, Role Identifier, Modified Date

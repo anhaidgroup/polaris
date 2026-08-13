@@ -1,0 +1,18 @@
+# Single-node Elasticsearch for Polaris BM25 indexing/ranking.
+# Matches the paper setup: security disabled (no credentials needed), one node,
+# port 9200.  BM25 similarity is left at ES defaults (k1=1.2, b=0.75).
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.1
+    container_name: polaris-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms4g -Xmx4g
+    ports:
+      - "9200:9200"
+    volumes:
+      - polaris-esdata:/usr/share/elasticsearch/data
+
+volumes:
+  polaris-esdata:

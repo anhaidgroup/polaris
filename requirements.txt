@@ -1,0 +1,3 @@
+elasticsearch
+huggingface_hub
+boto3

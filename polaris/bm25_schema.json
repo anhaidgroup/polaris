@@ -1,0 +1,51 @@
+{
+ "settings": {
+  "analysis": {
+   "tokenizer": {
+    "basic_tokenizer": {
+     "type": "pattern",
+     "pattern": "(?=[A-Z][a-z])|[^a-zA-Z0-9]+"
+    }
+   },
+   "filter": {
+    "porter_stem": {
+     "type": "porter_stem"
+    },
+    "stopword_filter": {
+     "type": "stop",
+     "stopwords": "_english_"
+    }
+   },
+   "analyzer": {
+    "word_analyzer": {
+     "type": "custom",
+     "tokenizer": "basic_tokenizer",
+     "filter": [
+      "lowercase",
+      "stopword_filter",
+      "porter_stem"
+     ]
+    }
+   }
+  }
+ },
+ "mappings": {
+  "properties": {
+   "table_id": {
+    "type": "keyword"
+   },
+   "table_context": {
+    "type": "text",
+    "analyzer": "word_analyzer"
+   },
+   "description": {
+    "type": "text",
+    "analyzer": "word_analyzer"
+   },
+   "expanded_schema": {
+    "type": "text",
+    "analyzer": "word_analyzer"
+   }
+  }
+ }
+}

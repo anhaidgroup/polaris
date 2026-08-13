@@ -1,0 +1,24 @@
+# Downloaded datasets (python data/download.py)
+data/*
+!data/README.md
+!data/download.py
+
+# Run outputs
+*.jsonl
+!examples/*.jsonl
+out/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Model weights
+*.safetensors
+*.bin
+
+# Local credentials (copy .env.example to .env)
+.env
+
+# Paper draft (not released)
+paper.pdf
