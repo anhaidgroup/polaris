@@ -52,6 +52,10 @@ If you already have an Elasticsearch server, skip `docker compose up -d` and add
 `--es-url <your server's URL>` to the commands that use Elasticsearch
 (`polaris.train` and `evaluation/evaluate.py`).
 
+If the model download stalls with `DownloadStallError`, run
+`pip uninstall -y hf_transfer` and rerun the command — the partial download
+resumes.
+
 ## Polaris Datasets
 
 We released the six datasets used in the Polaris paper on the
