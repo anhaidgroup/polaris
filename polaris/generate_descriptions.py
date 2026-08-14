@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from .expand_names import expand_missing
 from .generate_candidates import run_generation
@@ -38,6 +39,11 @@ def main(argv=None) -> int:
         help="tables per GPU batch (lower it on GPU out-of-memory)",
     )
     args = parser.parse_args(argv)
+    if args.adapter == "out/adapter" and not Path(args.adapter).exists():
+        raise SystemExit(
+            "out/adapter not found - train the model first: "
+            "python -m polaris.train --datasets <training datasets>"
+        )
 
     code = expand_missing(list(dict.fromkeys(args.datasets)))
     if code:
