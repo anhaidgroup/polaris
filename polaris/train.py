@@ -14,6 +14,7 @@ import argparse
 import sys
 
 from . import dpo, expand_names, generate_candidates, generate_preference_pairs
+from .utils import line_buffered
 
 
 def main(argv=None) -> int:
@@ -33,19 +34,24 @@ def main(argv=None) -> int:
         help="Elasticsearch URL (default: http://localhost:9200)",
     )
     args = parser.parse_args(argv)
+    line_buffered()
     names = list(dict.fromkeys(args.datasets))
 
+    print("[1/4] expand_names: expanding table and column names")
     code = expand_names.expand_missing(names)
     if code:
         return code
+    print("[2/4] generate_candidates: generating candidate descriptions")
     code = generate_candidates.main(["--datasets", *names])
     if code:
         return code
+    print("[3/4] generate_preference_pairs: building preference pairs")
     code = generate_preference_pairs.main(
         ["--datasets", *names, "--es-url", args.es_url]
     )
     if code:
         return code
+    print("[4/4] dpo: training")
     return dpo.main([])
 
 

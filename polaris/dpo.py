@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .utils import line_buffered
+
 #: Training settings (paper Table 8).
 DPO_DEFAULTS: dict[str, Any] = {
     "base_model": "meta-llama/Llama-3.1-8B-Instruct",
@@ -112,6 +114,7 @@ def train(overrides: dict[str, Any] | None = None) -> str:
     )
 
     pairs = load_pairs(cfg["dataset"])
+    print(f"Training on {len(pairs)} preference pairs")
     records = [format_pair(p, tokenizer) for p in pairs]
     train_dataset = hf_datasets.Dataset.from_list(records)
 
@@ -241,6 +244,7 @@ def main(argv=None) -> int:
     from .utils.env import load_env
 
     load_env()
+    line_buffered()
     parser = argparse.ArgumentParser(
         prog="python -m polaris.dpo",
         description="DPO-finetune the description model on preference pairs "

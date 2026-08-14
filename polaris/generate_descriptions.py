@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .expand_names import expand_missing
 from .generate_candidates import run_generation
+from .utils import line_buffered
 
 
 def main(argv=None) -> int:
@@ -45,9 +46,12 @@ def main(argv=None) -> int:
             "python -m polaris.train --datasets <training datasets>"
         )
 
+    line_buffered()
+    print("[1/2] expand_names: expanding table and column names")
     code = expand_missing(list(dict.fromkeys(args.datasets)))
     if code:
         return code
+    print("[2/2] generating descriptions")
     return run_generation(
         args.datasets, 1, args.adapter, args.batch_size, "descriptions"
     )

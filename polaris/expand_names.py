@@ -47,6 +47,7 @@ ExpansionBackend = Callable[[list[dict]], str]
 # read the table name and column names from; the ``build_*_prompt``
 # wrappers underneath adapt them to plain arguments.
 
+from .utils import line_buffered, progress
 from .prompts.column_expansion import (
     COLUMNS_PER_PROMPT,
     batch_columns,
@@ -89,7 +90,7 @@ def expand_tables(
 
     """
     results: list[dict] = []
-    for meta in tables:
+    for meta in progress(tables, total=len(tables), desc="expanding names"):
         table_name = getattr(meta, "table_name", None)
         columns = list(getattr(meta, "column_names", None) or [])
 
@@ -217,6 +218,7 @@ def main(argv=None) -> int:
     from .utils.env import load_env
 
     load_env()
+    line_buffered()
     parser = argparse.ArgumentParser(
         prog="python -m polaris.expand_names",
         description="Expand abbreviated table/column names with an LLM "

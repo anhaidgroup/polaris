@@ -46,6 +46,7 @@ def rank_candidates(
     {table_id: [(candidate_index, score), ...]} sorted best-first;
     never-retrieved candidates stay at 0.0, at the bottom.
     """
+    from .utils import progress
     from .utils.bm25 import create_index, index_tables
 
     # relevant queries per table: qrels rows with relevance_score > 0
@@ -64,7 +65,8 @@ def rank_candidates(
 
     rankings: dict[str, list[tuple[int, float]]] = {}
     seq = 0
-    for table_id, cands in candidates.items():
+    items = list(candidates.items())
+    for table_id, cands in progress(items, total=len(items), desc=f"ranking {dataset.name}"):
         queries = relevant_queries.get(table_id)
         if len(cands) < 2 or not queries:
             continue
@@ -260,6 +262,10 @@ def main(argv=None) -> int:
         help="Elasticsearch URL (default: http://localhost:9200)",
     )
     args = parser.parse_args(argv)
+
+    from .utils import line_buffered
+
+    line_buffered()
 
     from .expand_names import resolve_expansions
     from .load_data import load_dataset_or_exit

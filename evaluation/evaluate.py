@@ -101,6 +101,9 @@ def main(argv=None) -> int:
         help="Elasticsearch URL (default: http://localhost:9200)",
     )
     args = parser.parse_args(argv)
+    from polaris.utils import line_buffered
+
+    line_buffered()
     return run_evaluation(args)
 
 

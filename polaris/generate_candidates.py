@@ -18,8 +18,9 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterator
 
+from .utils import line_buffered, progress
 from .prompts.description_generation import (
     TableMeta,
     build_table_info,
@@ -173,7 +174,7 @@ def generate_candidates(
     total_batches = (len(chat_batches) + batch_size - 1) // batch_size
     device = getattr(model, "device", "cuda")
 
-    for start in _progress(
+    for start in progress(
         range(0, len(chat_batches), batch_size),
         total=total_batches,
         desc="generating candidates",
@@ -228,15 +229,6 @@ def generate_candidates(
                 "messages": chat,
                 "candidates": cands,
             }
-
-
-def _progress(iterable: Iterable, total: int, desc: str) -> Iterable:
-    """tqdm progress bar if tqdm is installed, otherwise the iterable unchanged."""
-    try:
-        from tqdm import tqdm  # type: ignore[import-untyped]
-    except ImportError:
-        return iterable
-    return tqdm(iterable, total=total, desc=desc)
 
 
 def run_generation(
@@ -315,6 +307,7 @@ def main(argv=None) -> int:
     from .utils.env import load_env
 
     load_env()
+    line_buffered()
     parser = argparse.ArgumentParser(
         prog="python -m polaris.generate_candidates",
         description="Generate candidate table descriptions for training "
