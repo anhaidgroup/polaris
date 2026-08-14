@@ -17,6 +17,7 @@ import argparse
 import json
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +27,9 @@ if TYPE_CHECKING:  # only type names; no runtime import of heavy deps
     from .load_data import Dataset, TableMeta
 
 _MARK = "<rank>"
+
+#: Parallel per-table ranking cycles against Elasticsearch.
+RANKING_WORKERS = 4
 
 
 def rank_candidates(
@@ -37,7 +41,8 @@ def rank_candidates(
     """Rank each table's candidate descriptions by BM25 retrievability.
 
     For each table with >= 2 candidates and >= 1 relevant query, builds a
-    temporary index holding one copy of the table per candidate (under
+    temporary index per table (in parallel, RANKING_WORKERS at a time)
+    holding one copy of the table per candidate (under
     marker ids, so all candidates compete in the same corpus) plus every
     other table once, then scores each candidate by its mean BM25 score
     over the table's relevant queries.
@@ -62,14 +67,14 @@ def rank_candidates(
             relevant_queries.setdefault(table_id, []).append(query_text)
 
     metas: dict[str, TableMeta] = {t.table_id: t for t in dataset.tables}
+    # ES index names must be lowercase alphanumerics
+    safe_name = re.sub(r"[^a-z0-9_-]+", "_", dataset.name.lower())
 
-    rankings: dict[str, list[tuple[int, float]]] = {}
-    seq = 0
-    items = list(candidates.items())
-    for table_id, cands in progress(items, total=len(items), desc=f"ranking {dataset.name}"):
+    def rank_one(item: tuple[int, tuple[str, list[str]]]):
+        seq, (table_id, cands) = item
         queries = relevant_queries.get(table_id)
         if len(cands) < 2 or not queries:
-            continue
+            return None
         meta = metas.get(table_id)
         if meta is None:
             raise ValueError(
@@ -79,10 +84,7 @@ def rank_candidates(
                 f"check that both come from the same tables."
             )
 
-        # ES index names must be lowercase alphanumerics
-        safe_name = re.sub(r"[^a-z0-9_-]+", "_", dataset.name.lower())
         index_name = f"{index_prefix}_{safe_name}_{seq}"
-        seq += 1
         create_index(client, index_name)  # deletes any stale leftover first
 
         copy_ids = [copy_id(i) for i in range(len(cands))]
@@ -125,15 +127,25 @@ def rank_candidates(
             client.indices.delete(index=index_name)
 
         n_queries = len(queries)
-        rankings[table_id] = sorted(
+        return table_id, sorted(
             (
                 (copy_index(sid), score / n_queries)
                 for sid, score in total_score.items()
             ),
-            key=lambda item: item[1],
+            key=lambda pair: pair[1],
             reverse=True,
         )
 
+    # Parallel over tables; pool.map keeps the input order.
+    rankings: dict[str, list[tuple[int, float]]] = {}
+    items = list(enumerate(candidates.items()))
+    with ThreadPoolExecutor(max_workers=RANKING_WORKERS) as pool:
+        for result in progress(
+            pool.map(rank_one, items), total=len(items),
+            desc=f"ranking {dataset.name}",
+        ):
+            if result is not None:
+                rankings[result[0]] = result[1]
     return rankings
 
 

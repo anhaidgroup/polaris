@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -58,14 +59,20 @@ from .prompts.description_generation import TableMeta
 from .prompts.table_expansion import _parse_table_final_answer, build_table_prompt
 
 
+#: Parallel LLM calls during expansion (boto3 retries throttling itself).
+EXPANSION_WORKERS = 8
+
+
 def expand_tables(
     tables: Sequence[TableMeta],
     backend: ExpansionBackend,
     expand_table_names: bool = True,
+    workers: int = EXPANSION_WORKERS,
 ) -> list[dict]:
     """Expand every table's column names (and, optionally, table name).
 
-    Per table, columns are prompted in batches of 10 and the parsed
+    Tables are expanded in parallel (workers threads); results keep the
+    input order.  Per table, columns are prompted in batches of 10 and the parsed
     expansions are joined in original column order; a column whose
     expansion is missing or empty keeps its raw name.  Tables that have a
     ``table_name`` then get a table name expansion pass that uses the expanded
@@ -89,8 +96,7 @@ def expand_tables(
             }
 
     """
-    results: list[dict] = []
-    for meta in progress(tables, total=len(tables), desc="expanding names"):
+    def expand_one(meta: TableMeta) -> dict:
         table_name = getattr(meta, "table_name", None)
         columns = list(getattr(meta, "column_names", None) or [])
 
@@ -108,8 +114,12 @@ def expand_tables(
         result = {"table_id": meta.table_id, "column_name_expansion": expanded}
         if table_exp is not None:
             result["table_name_expansion"] = table_exp
-        results.append(result)
-    return results
+        return result
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(progress(
+            pool.map(expand_one, tables), total=len(tables), desc="expanding names"
+        ))
 
 
 def read_expansions(path: str | Path) -> dict[str, dict[str, str | None]]:
