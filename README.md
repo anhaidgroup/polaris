@@ -36,7 +36,7 @@ See the Polaris paper (full citation below) for details.
 ## Installation
 
 Polaris requires `Python 3.10+`, an `AWS Bedrock token`, a `Hugging Face token`,
-a `GPU` (the paper used an A100 40 GB), `Elasticsearch`, and `Docker`.
+a `GPU`, `Elasticsearch`, and `Docker`.
 
 To set up, run:
 
