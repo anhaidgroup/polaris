@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 #: Table and column name expansion model.
 BEDROCK_MODEL_ID = "us.meta.llama4-maverick-17b-instruct-v1:0"
@@ -34,6 +36,23 @@ BEDROCK_INFERENCE_CONFIG: dict[str, Any] = {
 #: Environment variable holding the Bedrock API bearer token; boto3
 #: picks it up when creating the client.
 BEDROCK_TOKEN_ENV = "AWS_BEARER_TOKEN_BEDROCK"
+
+#: Bedrock failures worth retrying: the service is busy, the model timed
+#: out, or the connection dropped - none of them a bad request.  Matched
+#: by class name so botocore need not be imported here.
+BEDROCK_TRANSIENT_ERRORS = frozenset({
+    "ThrottlingException",
+    "ModelTimeoutException",
+    "ServiceUnavailableException",
+    "InternalServerException",
+    "ReadTimeoutError",
+    "ConnectTimeoutError",
+    "EndpointConnectionError",
+})
+
+#: Attempts per Bedrock call, with jittered exponential backoff between
+#: them (jitter keeps the worker threads from retrying in lockstep).
+BEDROCK_MAX_ATTEMPTS = 6
 
 #: A backend takes a chat (list of {"role", "content"} dicts) and
 #: returns the raw model completion text.
@@ -59,7 +78,7 @@ from .prompts.description_generation import TableMeta
 from .prompts.table_expansion import _parse_table_final_answer, build_table_prompt
 
 
-#: Parallel LLM calls during expansion (boto3 retries throttling itself).
+#: Parallel LLM calls during expansion.
 EXPANSION_WORKERS = 8
 
 
@@ -68,7 +87,7 @@ def expand_tables(
     backend: ExpansionBackend,
     expand_table_names: bool = True,
     workers: int = EXPANSION_WORKERS,
-) -> list[dict]:
+) -> Iterator[dict]:
     """Expand every table's column names (and, optionally, table name).
 
     Tables are expanded in parallel (workers threads); results keep the
@@ -86,8 +105,10 @@ def expand_tables(
             :class:`BedrockBackend`.
         expand_table_names: set ``False`` to skip the table name expansion pass.
 
-    Returns:
-        One dict per table, in input order::
+    Yields:
+        One dict per table, in input order, so callers can write results
+        to disk as they arrive.  Table *k* is yielded once it and every
+        earlier table have finished::
 
             {
                 "table_id": str,
@@ -117,9 +138,9 @@ def expand_tables(
         return result
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(progress(
+        yield from progress(
             pool.map(expand_one, tables), total=len(tables), desc="expanding names"
-        ))
+        )
 
 
 def read_expansions(path: str | Path) -> dict[str, dict[str, str | None]]:
@@ -200,20 +221,57 @@ class BedrockBackend:
     def __call__(self, messages: list[dict]) -> str:
         system_text = messages[0]["content"]
         user_text = messages[-1]["content"]
-        response = self.client.converse(
-            modelId=self.model_id,
-            system=[{"text": system_text}],
-            messages=[{"role": "user", "content": [{"text": user_text}]}],
-            inferenceConfig=self.inference_config,
-        )
+        for attempt in range(BEDROCK_MAX_ATTEMPTS):
+            try:
+                response = self.client.converse(
+                    modelId=self.model_id,
+                    system=[{"text": system_text}],
+                    messages=[{"role": "user", "content": [{"text": user_text}]}],
+                    inferenceConfig=self.inference_config,
+                )
+                break
+            except Exception as exc:
+                # Throttling and model timeouts are routine on long runs.
+                if (type(exc).__name__ not in BEDROCK_TRANSIENT_ERRORS
+                        or attempt == BEDROCK_MAX_ATTEMPTS - 1):
+                    raise
+                time.sleep(2 ** attempt * (0.5 + random.random()))
         return response["output"]["message"]["content"][0]["text"]
 
 
+def expanded_ids(path: str | Path) -> set[str]:
+    """The table_ids already expanded in an expansions jsonl.
+
+    Empty when *path* is absent or written by an older version, so the
+    caller rewrites it from scratch.  A truncated final line - the tail of
+    a run that was killed mid-write - ends the scan and is overwritten.
+    """
+    ids: set[str] = set()
+    if not Path(path).is_file():
+        return ids
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                break  # truncated tail; resume from here
+            if "column_name_expansion" not in row:
+                return set()  # old format: expand the dataset again
+            ids.add(str(row["table_id"]))
+    return ids
+
+
 def expand_missing(names: list[str]) -> int:
-    """Run the expansion for datasets that have no expansions file yet."""
+    """Run the expansion for datasets whose expansions are missing or
+    incomplete (a partial file resumes rather than counting as done)."""
+    from .load_data import load_dataset_or_exit
+
     todo = []
     for name in names:
-        if Path(f"expansions_{name}.jsonl").is_file():
+        tables = load_dataset_or_exit(name).tables
+        if len(expanded_ids(f"expansions_{name}.jsonl")) >= len(tables):
             print(f"using existing expansions_{name}.jsonl")
         else:
             todo.append(name)
@@ -252,12 +310,27 @@ def main(argv=None) -> int:
     except (ImportError, RuntimeError) as exc:
         raise SystemExit(str(exc)) from None
     for tables, output in jobs:
-        results = expand_tables(tables, backend)
         out = Path(output)
-        with open(out, "w", encoding="utf-8") as f:
-            for row in results:
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        print(f"Wrote {len(results)} expansions to {out}")
+        # Rows are appended as they finish, so an interrupted run keeps
+        # what it expanded and a rerun skips those tables.
+        done = expanded_ids(out)
+        todo = [t for t in tables if t.table_id not in done]
+        if done:
+            print(f"{out}: {len(done)} already expanded, {len(todo)} to go")
+        n = len(done)
+        with open(out, "a" if done else "w", encoding="utf-8") as f:
+            try:
+                for row in expand_tables(todo, backend):
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    f.flush()
+                    n += 1
+            except Exception as exc:
+                raise SystemExit(
+                    f"Bedrock call failed ({type(exc).__name__}: {exc}); the "
+                    f"{n} rows already in {out} are kept, rerunning resumes "
+                    f"after them"
+                ) from None
+        print(f"{out}: {n} rows")
     return 0
 
 
