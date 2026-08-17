@@ -188,6 +188,6 @@ same command scores it on the same datasets.
   title  = {Polaris: Learning to Generate Table Descriptions from Retrieval Feedback},
   author = {Cai, Ting and Phan, Tuan Minh and Doan, AnHai},
   year   = {2026},
-  note   = {Under review}
+  note   = {arXiv}
 }
 ```
