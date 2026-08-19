@@ -185,9 +185,11 @@ same command scores it on the same datasets.
 
 ```bibtex
 @article{polaris2026,
-  title  = {Polaris: Learning to Generate Table Descriptions from Retrieval Feedback},
-  author = {Cai, Ting and Phan, Tuan Minh and Doan, AnHai},
-  year   = {2026},
-  note   = {arXiv}
+  title   = {Polaris: Learning to Generate Table Descriptions from Retrieval Feedback},
+  author  = {Cai, Ting and Phan, Tuan Minh and Doan, AnHai},
+  year    = {2026},
+  journal = {arXiv preprint arXiv:2608.17171},
+  doi     = {10.48550/arXiv.2608.17171},
+  url     = {https://arxiv.org/abs/2608.17171}
 }
 ```
